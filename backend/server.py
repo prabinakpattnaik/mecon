@@ -667,6 +667,8 @@ async def create_wbs(payload: WBSCreate, user: dict = Depends(require_role("admi
         parent = await db.wbs.find_one({"id": payload.parent_id})
         if parent:
             level = (parent.get("level", 1) or 1) + 1
+    if level > 10:
+        raise HTTPException(400, "WBS hierarchy cannot exceed 10 levels")
     doc["level"] = level
     doc["progress"] = 0
     doc["actual_start"] = None
@@ -691,17 +693,27 @@ async def update_wbs(wid: str, payload: WBSUpdate, user: dict = Depends(require_
 
 @api.delete("/wbs/{wid}")
 async def delete_wbs(wid: str, user: dict = Depends(require_role("admin", "ProjectCoordinator"))):
-    # Cascade delete children
-    children = await db.wbs.find({"parent_id": wid}, {"_id": 0, "id": 1}).to_list(2000)
-    for c in children:
-        await db.wbs.delete_many({"id": c["id"]})
-    await db.wbs.delete_one({"id": wid})
-    return {"ok": True}
+    # Recursive cascade delete
+    to_delete = [wid]
+    queue = [wid]
+    while queue:
+        next_queue = []
+        for pid in queue:
+            children = await db.wbs.find({"parent_id": pid}, {"_id": 0, "id": 1}).to_list(2000)
+            for c in children:
+                to_delete.append(c["id"])
+                next_queue.append(c["id"])
+        queue = next_queue
+    await db.wbs.delete_many({"id": {"$in": to_delete}})
+    return {"ok": True, "deleted": len(to_delete)}
 
 
 # ---------------- Gantt ----------------
 @api.get("/projects/{pid}/gantt")
 async def project_gantt(pid: str, user: dict = Depends(get_current_user)):
+    project = await db.projects.find_one({"id": pid})
+    if not project:
+        raise HTTPException(404, "Project not found")
     activities = await db.activities.find({"project_id": pid}, {"_id": 0}).sort("planned_start", 1).to_list(500)
     return activities
 

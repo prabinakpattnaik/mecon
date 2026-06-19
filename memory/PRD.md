@@ -17,6 +17,16 @@ Build an enterprise-level Project Monitoring System for MECON Limited based on t
 - **Contractor** (contractor@lnt.com) — DPR submission, bill submission (read-mostly).
 - **Client** (client@sail.in) — read-only portfolio view.
 
+## Phase-1.5 (2026-02 — completed)
+- ✅ Create dialogs for Projects, NCRs, Hindrances, DPR (all wired with cascading project→package selects)
+- ✅ Generic reusable `FormDialog` wrapper (shadcn Dialog)
+- ✅ WBS multi-level tree explorer in ProjectDetail (4-level seed, supports up to 10 levels per FRS) with expand/collapse, weightage, progress, status
+- ✅ Gantt timeline view grouped by Engineering/Procurement/Construction areas, planned vs actual bars, critical-path highlighting
+- ✅ Workflow History Drawer (shadcn Sheet) — opens on row View button, shows priority/SLA/stage/full approval history timeline with action panel (approve/reject/escalate + comment)
+- ✅ Tabbed ProjectDetail layout: Overview · WBS Tree · Gantt Timeline · Packages · Milestones
+- ✅ Backend hardening: WBS level≤10 bound, recursive cascade delete, Gantt 404 on invalid project
+- ✅ Tests: 13/13 new pytest + 41/41 carry-over = 54 backend tests passing; frontend 100% after WbsTree fix
+
 ## Phase-1 MVP (Completed — 2026-02)
 - ✅ JWT auth + RBAC across 9 roles, admin seeding, 6 demo accounts
 - ✅ Command Center dashboard (8 KPI tiles, S-curve portfolio bar chart, contractor performance ranking with letter grades A+ → D, CCTV thumbnails, My Actions widget, Alerts feed)
