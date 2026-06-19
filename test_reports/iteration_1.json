@@ -1,0 +1,46 @@
+{
+  "summary": "Comprehensive end-to-end testing of MECON Project Monitoring MVP (16 modules). Backend: 41/41 pytest tests passing on first run (after one test-script fix). Frontend: Login (admin + 6 demo roles), demo-button pre-fill, dashboard KPIs/charts, sidebar navigation across 9 modules, project list (5 seeded codes verified) + project detail with S-curve, action buttons (workflow approve, drawing approve, NCR close, hindrance close, bill advance), notifications panel, logout, protected-route redirect — all functional. RBAC (Contractor blocked on POST /projects and /users) verified. Seed data intact (5 projects, 30 packages, 50 drawings, 150 DPRs, 22 NCRs, 20 hindrances, 28 bills, 35 workflows, 16 notifications).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/projects", "issue": "Pydantic model requires location, start_date, end_date which are not documented in review_request payload example. Returns 422 with clear error — not a bug, but noted for frontend forms / API docs."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Workflows page", "issue": "wf-approve / wf-reject / wf-escalate buttons render for ALL rows regardless of workflow status. After an Approve advances stage to 'In Progress' or 'Approved', the action buttons are still shown — should be hidden once status is Approved/Rejected/Closed.", "selector": "[data-testid^=wf-approve-]", "priority": "MEDIUM"},
+      {"component": "Dashboard KPI testIds", "issue": "Three KPI data-testids in code differ from review_request spec: kpi-delayed-projects (spec: kpi-critical), kpi-amber-projects (spec: kpi-at-risk), kpi-pending-drawings (spec: kpi-drawings-pending). All KPIs render correctly visually; only the testid naming is inconsistent with spec.", "selector": "kpi-delayed-projects / kpi-amber-projects / kpi-pending-drawings", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Active Projects KPI text renders concatenated as 'Active Projects6/ 6' with no space between label and value when read via text_content — purely visual spacing is fine in screenshot; minor cosmetic accessibility note."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mecon_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "[MEDIUM] In Workflows.js, hide wf-approve/reject/escalate buttons when status is in ('Approved','Rejected','Closed') to match the spec and avoid no-op clicks.",
+    "[LOW] Align Dashboard KPI data-testid names to spec (kpi-critical, kpi-at-risk, kpi-drawings-pending) OR update the spec — currently mismatched.",
+    "[INFO] /api/projects POST contract: ensure any frontend create-project form includes location/start_date/end_date — backend rejects without them (422)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 952 lines — consider splitting into routers (auth, projects, drawings, finance, etc.) for maintainability (>700 line guideline).",
+    "JWT_SECRET is hardcoded in .env as a static string — acceptable for MVP demo but rotate before production.",
+    "CORS_ORIGINS='*' in backend/.env while cookies are httpOnly + samesite=lax + credentials. With wildcard origin browsers will reject credentialed cookies; explicit FRONTEND_URL origin should be used in CORS allow_origins for production (Bearer token path still works since localStorage is used).",
+    "Workflow / drawing / NCR / hindrance / bill action buttons in pages do not conditionally render based on status — UX issue (see ui_bugs).",
+    "All endpoints correctly use async/await and Pydantic validation; MongoDB _id is properly excluded via projections.",
+    "RBAC via require_role decorator works correctly (verified: Contractor blocked 403)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mecon_backend.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "admin@mecon.in / Mecon@2026 (admin); pc@mecon.in, site@mecon.in, qaqc@mecon.in, finance@mecon.in / Demo@2026; contractor@lnt.com, client@sail.in / Demo@2026 — all verified working.",
+  "seed_data_creation": "No seed needed — backend auto-seeds on startup. Verified 5 projects (BSP-EXP-3, RSP-COKE-7, NMDC-IRON, PWR-NTPC, BHEL-MFG) plus 1 test project created by CRUD test (TEST_PRJ_X1).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test suite at /app/backend/tests/test_mecon_backend.py covers 41 tests across auth, RBAC, seed data, dashboard, project detail, and all action endpoints (workflow/drawing/NCR/hindrance/bill). All pass. Frontend verified via Playwright: all sidebar routes work, action buttons functional. The only real UX bug is Workflows page showing action buttons after status is final — easy fix in Workflows.js. Note: review_request listed some data-testid names that differ from actual code (kpi-critical vs kpi-delayed-projects). When testing frontend, prefer actual data-testids from /app/frontend/src/pages/Dashboard.js.",
+  "rca of the issue": "Workflow action buttons stay visible after approve: In /app/frontend/src/pages/Workflows.js (lines ~74-94) the Approve/Reject/Escalate buttons are rendered unconditionally in every row. Backend correctly updates status to 'In Progress'/'Approved'/'Rejected'/'Escalated' (server.py L513-532) and frontend re-fetches list — but UI does not gate the action buttons by status. Fix: wrap buttons in `{['Pending','In Progress'].includes(w.status) && (...)}` or hide when status in ('Approved','Rejected','Closed')."
+}
