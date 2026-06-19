@@ -1,0 +1,135 @@
+{
+  "theme": "Light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "emotional_tone": "Authoritative, Precise, Command-Center, Industrial",
+  "domain": "Enterprise Command Center / Govt PSU Project Monitoring",
+  "colors": {
+    "background": {
+      "app": "bg-slate-50",
+      "surface": "bg-white",
+      "sidebar": "bg-slate-900"
+    },
+    "text": {
+      "primary": "text-slate-900",
+      "secondary": "text-slate-600",
+      "tertiary": "text-slate-400",
+      "inverse": "text-white"
+    },
+    "border": {
+      "default": "border-slate-200",
+      "focus": "border-blue-600"
+    },
+    "brand": {
+      "primary": "bg-blue-700",
+      "primary_hover": "hover:bg-blue-800",
+      "primary_text": "text-blue-700"
+    },
+    "status": {
+      "success_bg": "bg-emerald-50",
+      "success_text": "text-emerald-700",
+      "success_border": "border-emerald-200",
+      "warning_bg": "bg-amber-50",
+      "warning_text": "text-amber-700",
+      "warning_border": "border-amber-200",
+      "danger_bg": "bg-red-50",
+      "danger_text": "text-red-700",
+      "danger_border": "border-red-200",
+      "info_bg": "bg-sky-50",
+      "info_text": "text-sky-700"
+    }
+  },
+  "typography": {
+    "heading_font": "Chivo",
+    "body_font": "IBM Plex Sans",
+    "rules": [
+      "Avoid Inter, Roboto, or generic sans-serifs.",
+      "Headings should be tightly tracked (tracking-tight).",
+      "Overlines for KPIs must be uppercase, text-xs, tracking-widest."
+    ],
+    "scale": {
+      "h1": "text-3xl md:text-4xl font-bold tracking-tight text-slate-900",
+      "h2": "text-xl md:text-2xl font-semibold tracking-tight text-slate-800",
+      "h3": "text-lg font-medium text-slate-800",
+      "body": "text-sm text-slate-600 leading-relaxed",
+      "kpi_value": "text-3xl font-bold tracking-tighter text-slate-900",
+      "label": "text-xs font-semibold uppercase tracking-wider text-slate-500"
+    }
+  },
+  "layout": {
+    "strategy": "The Control Room Grid",
+    "spacing": {
+      "dense": "p-3 gap-3",
+      "standard": "p-5 gap-5",
+      "section": "py-8"
+    },
+    "grid_system": {
+      "container": "grid grid-cols-1 md:grid-cols-12 gap-4 or gap-6",
+      "kpi_widgets": "col-span-1 md:col-span-3",
+      "main_chart": "col-span-1 md:col-span-8",
+      "feed_list": "col-span-1 md:col-span-4",
+      "full_width_table": "col-span-1 md:col-span-12"
+    },
+    "borders_and_surfaces": {
+      "cards": "bg-white border border-slate-200 rounded-sm shadow-sm",
+      "inputs": "bg-white border border-slate-300 rounded-sm focus:ring-2 focus:ring-blue-600/20",
+      "tables": "border-collapse border border-slate-200, row border-b border-slate-100"
+    }
+  },
+  "components": {
+    "navigation": "Fixed left rail (w-64) with dark theme (bg-slate-900 text-slate-300) for high contrast. Top app bar for global search and breadcrumbs (bg-white border-b border-slate-200).",
+    "buttons": "Square or minimally rounded (rounded-sm). Primary uses brand blue. Secondary uses outline (border-slate-300 text-slate-700 hover:bg-slate-50).",
+    "badges": "Used for statuses (Green/Amber/Red). Use pale background with dark text and border (e.g., bg-red-50 text-red-700 border-red-200).",
+    "tables": "High density. text-sm. Use sticky headers. Hover state on rows (hover:bg-slate-50). Actions (edit/view) aligned right.",
+    "charts": "Use Recharts or Shadcn charts. Use solid lines. Avoid 3D or heavy gradients. Stick to brand blue, emerald, amber, red for data series.",
+    "kanban": "For Finance & Billing workflow. Columns represent stages. Cards have tight padding (p-3), sharp borders, and display SLA aging.",
+    "tabs": "Underline style preferred over pills for enterprise look. border-b-2 border-transparent hover:border-slate-300 data-[state=active]:border-blue-600."
+  },
+  "motion": {
+    "rules": "Minimalist. Micro-interactions for feedback.",
+    "hover_states": "Buttons and links should have transition-colors duration-150. Cards can have a subtle shadow-md lift on hover (-translate-y-px).",
+    "page_transitions": "None. Keep it snappy and immediate."
+  },
+  "icons": {
+    "library": "lucide-react",
+    "usage": "Use 16px (w-4 h-4) for buttons/tables, 24px (w-6 h-6) for KPIs. Always pair status colors with icons (CheckCircle, AlertTriangle, XCircle) for accessibility."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "category": "auth_background",
+        "url": "https://images.unsplash.com/photo-1780396140009-820f99cb18f7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwzfHxzdGVlbCUyMHBsYW50JTIwY29uc3RydWN0aW9uJTIwc2l0ZXxlbnwwfHx8fDE3ODE4NDc2NDR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Steel plant silhouette against sky, representing industrial mega-projects. Use with a dark overlay (bg-slate-900/80) on the login page."
+      },
+      {
+        "category": "empty_state_blueprints",
+        "url": "https://images.unsplash.com/photo-1721244654392-9c912a6eb236?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwyfHxlbmdpbmVlcmluZyUyMGJsdWVwcmludCUyMGRyYWZ0aW5nJTIwYmx1ZXByaW50fGVufDB8fHx8MTc4MTg0NzY0NHww&ixlib=rb-4.1.0&q=85",
+        "description": "Engineering blueprint. Use as a subtle watermark or empty state illustration in the Drawing & Document Approval module."
+      },
+      {
+        "category": "brand_logo",
+        "url": "https://images.pexels.com/photos/15342412/pexels-photo-15342412.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Abstract white logo, use as a placeholder for the MECON or partner logo. Can be heavily cropped."
+      },
+      {
+        "category": "dashboard_cctv_thumbnail",
+        "url": "https://images.unsplash.com/photo-1772299121503-cd62a57e3a26?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwyfHxzdGVlbCUyMHBsYW50JTIwY29uc3RydWN0aW9uJTIwc2l0ZXxlbnwwfHx8fDE3ODE4NDc2NDR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Workers inspecting an industrial space. Use this as a simulated CCTV live feed thumbnail on the dashboard."
+      }
+    ]
+  },
+  "accessibility": {
+    "contrast": "Strict APCA/WCAG AA compliance. Never rely solely on color for meaning (e.g., an Amber hindrance badge must have text saying 'Severity: High' or a warning icon).",
+    "testing_attributes": "All interactive elements (buttons, nav links, tabs, table rows, form inputs) MUST have a descriptive data-testid attribute (e.g., data-testid='approve-dpr-button')."
+  },
+  "instructions_to_main_agent": [
+    "Write components in .js or .jsx, not .tsx. Prop types or standard JS is required.",
+    "Use pure Tailwind CSS for structural grid layouts (avoid overusing generic Shadcn Card/Section wrappers for complex grids).",
+    "Build the dashboard using a CSS grid (grid-cols-12). Follow the layout rules in this JSON strictly.",
+    "Use Shadcn UI for forms, dialogs, dropdowns, and tabs, but customize the classes to use sharp borders (rounded-sm) and the defined slate/blue color palette.",
+    "Avoid gradients entirely. Use flat colors with 1px borders.",
+    "Install and use 'lucide-react' for all iconography.",
+    "For typography, import Chivo and IBM Plex Sans from Google Fonts in index.css or equivalent.",
+    "Do not use purple or teal. Stick to Slate, Blue, Emerald, Amber, and Red.",
+    "Ensure every clickable element has a unique 'data-testid' attribute in kebab-case."
+  ]
+}
