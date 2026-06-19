@@ -72,24 +72,30 @@ export default function Workflows() {
                 <td className="px-4 py-2.5"><StatusBadge value={w.status} /></td>
                 <td className="px-4 py-2.5">
                   <div className="flex justify-end gap-1">
-                    <button
-                      data-testid={`wf-approve-${w.id}`}
-                      onClick={() => act(w.id, "approve")}
-                      className="p-1.5 hover:bg-emerald-50 text-emerald-700 border border-transparent hover:border-emerald-200 rounded-sm"
-                      title="Approve"
-                    ><Check className="w-3.5 h-3.5" /></button>
-                    <button
-                      data-testid={`wf-reject-${w.id}`}
-                      onClick={() => act(w.id, "reject")}
-                      className="p-1.5 hover:bg-red-50 text-red-700 border border-transparent hover:border-red-200 rounded-sm"
-                      title="Reject"
-                    ><X className="w-3.5 h-3.5" /></button>
-                    <button
-                      data-testid={`wf-escalate-${w.id}`}
-                      onClick={() => act(w.id, "escalate")}
-                      className="p-1.5 hover:bg-amber-50 text-amber-700 border border-transparent hover:border-amber-200 rounded-sm"
-                      title="Escalate"
-                    ><FastForward className="w-3.5 h-3.5" /></button>
+                    {["Pending", "In Progress", "Escalated"].includes(w.status) ? (
+                      <>
+                        <button
+                          data-testid={`wf-approve-${w.id}`}
+                          onClick={() => act(w.id, "approve")}
+                          className="p-1.5 hover:bg-emerald-50 text-emerald-700 border border-transparent hover:border-emerald-200 rounded-sm"
+                          title="Approve"
+                        ><Check className="w-3.5 h-3.5" /></button>
+                        <button
+                          data-testid={`wf-reject-${w.id}`}
+                          onClick={() => act(w.id, "reject")}
+                          className="p-1.5 hover:bg-red-50 text-red-700 border border-transparent hover:border-red-200 rounded-sm"
+                          title="Reject"
+                        ><X className="w-3.5 h-3.5" /></button>
+                        <button
+                          data-testid={`wf-escalate-${w.id}`}
+                          onClick={() => act(w.id, "escalate")}
+                          className="p-1.5 hover:bg-amber-50 text-amber-700 border border-transparent hover:border-amber-200 rounded-sm"
+                          title="Escalate"
+                        ><FastForward className="w-3.5 h-3.5" /></button>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">closed</span>
+                    )}
                   </div>
                 </td>
               </tr>
