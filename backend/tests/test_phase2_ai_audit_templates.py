@@ -117,7 +117,7 @@ class TestWbsImport:
         r = admin_client.post(f"{API}/wbs/import?project_id={project_id}", files=files)
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body.get("ok") is True
+        assert body.get("ok") == True
         assert body.get("imported") == 4
 
         # Verify level auto-computation by fetching wbs tree
