@@ -5,7 +5,10 @@ import StatusBadge from "../components/StatusBadge";
 import KpiCard from "../components/KpiCard";
 import WbsTree from "../components/WbsTree";
 import GanttChart from "../components/GanttChart";
-import { ChevronLeft, FileWarning, AlertTriangle, FileText, Receipt, FolderTree, CalendarRange, BarChart3, Layers } from "lucide-react";
+import AIInsightCard from "../components/AIInsightCard";
+import CsvImportDialog from "../components/CsvImportDialog";
+import { useAuth } from "../contexts/AuthContext";
+import { ChevronLeft, FileWarning, AlertTriangle, FileText, Receipt, FolderTree, CalendarRange, BarChart3, Layers, Upload } from "lucide-react";
 import {
   ResponsiveContainer,
   Area,
@@ -20,15 +23,22 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 
 export default function ProjectDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [wbs, setWbs] = useState([]);
   const [gantt, setGantt] = useState([]);
+  const [showCsvImport, setShowCsvImport] = useState(false);
+
+  const loadWbs = () => api.get(`/wbs?project_id=${id}`).then((r) => setWbs(r.data));
 
   useEffect(() => {
     api.get(`/projects/${id}/overview`).then((r) => setData(r.data));
-    api.get(`/wbs?project_id=${id}`).then((r) => setWbs(r.data));
+    loadWbs();
     api.get(`/projects/${id}/gantt`).then((r) => setGantt(r.data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const canEditWbs = user && ["admin", "ProjectCoordinator"].includes(user.role);
 
   if (!data) return <div className="text-overline text-slate-500">Loading project…</div>;
   const { project, packages, milestones, kpis, curve } = data;
@@ -81,6 +91,8 @@ export default function ProjectDetail() {
 
         {/* Overview */}
         <TabsContent value="overview" className="mt-5 space-y-5">
+          <AIInsightCard projectId={id} />
+
           <div className="card-flat p-5">
             <div className="text-overline">Progress S-Curve</div>
             <h3 className="font-display text-lg font-semibold text-slate-900 mt-0.5 mb-3">Planned vs Actual Cumulative (24 weeks)</h3>
@@ -111,17 +123,34 @@ export default function ProjectDetail() {
         {/* WBS */}
         <TabsContent value="wbs" className="mt-5">
           <div className="card-flat p-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
               <div>
                 <div className="text-overline">Work Breakdown Structure</div>
                 <h3 className="font-display text-lg font-semibold text-slate-900 mt-0.5">Multi-level hierarchy ({wbs.length} elements)</h3>
               </div>
-              <div className="text-[11px] text-slate-500 font-mono">
-                Levels: {[...new Set(wbs.map((w) => w.level))].sort().join(" · ")}
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] text-slate-500 font-mono">
+                  Levels: {[...new Set(wbs.map((w) => w.level))].sort().join(" · ")}
+                </div>
+                {canEditWbs && (
+                  <button
+                    data-testid="wbs-import-csv-button"
+                    onClick={() => setShowCsvImport(true)}
+                    className="text-xs font-semibold px-3 py-1.5 border border-slate-300 hover:border-blue-600 hover:text-blue-700 rounded-sm inline-flex items-center gap-1.5"
+                  >
+                    <Upload className="w-3.5 h-3.5" /> Import CSV
+                  </button>
+                )}
               </div>
             </div>
-            <WbsTree items={wbs} />
+            <WbsTree items={wbs} projectId={id} editable={canEditWbs} onChange={loadWbs} />
           </div>
+          <CsvImportDialog
+            open={showCsvImport}
+            onClose={() => setShowCsvImport(false)}
+            projectId={id}
+            onImported={() => loadWbs()}
+          />
         </TabsContent>
 
         {/* Gantt */}

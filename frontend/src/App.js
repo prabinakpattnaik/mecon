@@ -16,6 +16,8 @@ import Hindrances from "./pages/Hindrances";
 import Finance from "./pages/Finance";
 import Analytics from "./pages/Analytics";
 import MyActions from "./pages/MyActions";
+import WorkflowTemplates from "./pages/WorkflowTemplates";
+import AuditLog from "./pages/AuditLog";
 
 function App() {
   return (
@@ -42,6 +44,8 @@ function App() {
             <Route path="hindrances" element={<Hindrances />} />
             <Route path="finance" element={<Finance />} />
             <Route path="analytics" element={<Analytics />} />
+            <Route path="workflow-templates" element={<WorkflowTemplates />} />
+            <Route path="audit-log" element={<AuditLog />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

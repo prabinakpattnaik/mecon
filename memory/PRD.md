@@ -17,6 +17,15 @@ Build an enterprise-level Project Monitoring System for MECON Limited based on t
 - **Contractor** (contractor@lnt.com) — DPR submission, bill submission (read-mostly).
 - **Client** (client@sail.in) — read-only portfolio view.
 
+## Phase-2 (2026-02 — completed)
+- ✅ **Editable WBS Tree** — inline edit (name, dates, progress, weight), add-child button with auto-level computation (≤10), recursive delete with cascade
+- ✅ **CSV Bulk Import** for WBS — multipart upload at `POST /api/wbs/import?project_id=…`, sample CSV download in dialog, supports up to 10-level parent_code chains
+- ✅ **AI Risk & Health Engine** powered by Claude Sonnet 4.6 (`emergentintegrations` + `EMERGENT_LLM_KEY`) — `GET /api/projects/{pid}/ai-insights[?force=true]` returns structured JSON `{health_summary, top_risks[], recommendations[], forecast}`, 30-min cache, displayed as `AIInsightCard` on ProjectDetail Overview tab
+- ✅ **Workflow Templates** — collection + CRUD endpoints + admin page at `/workflow-templates` (visual stage-chain builder with reorderable stage list, default priority + SLA)
+- ✅ **Audit Log Explorer** — every mutating action logged to `audit_logs` collection (action, entity_type, entity_id, user, role, timestamp, description). Frontend page at `/audit-log` with entity-type filter, immutable timeline view
+- ✅ Backend audit hooks added to: project.create, ncr.create/close, hindrance.create/close, workflow.{approve,reject,escalate}, wbs.{create,update,delete,import}, template.{create,delete}
+- ✅ Admin section in left sidebar (visible to admin/ProjectCoordinator only): Workflow Templates · Audit Log
+
 ## Phase-1.5 (2026-02 — completed)
 - ✅ Create dialogs for Projects, NCRs, Hindrances, DPR (all wired with cascading project→package selects)
 - ✅ Generic reusable `FormDialog` wrapper (shadcn Dialog)

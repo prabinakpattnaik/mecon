@@ -16,6 +16,8 @@ import {
   Search,
   Building2,
   CircleUser,
+  Settings2,
+  ScrollText,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import api from "../api/client";
@@ -31,6 +33,11 @@ const NAV = [
   { to: "/hindrances", label: "Hindrances", icon: AlertTriangle, testId: "nav-hindrances" },
   { to: "/finance", label: "Finance & Billing", icon: Receipt, testId: "nav-finance" },
   { to: "/analytics", label: "Analytics", icon: BarChart3, testId: "nav-analytics" },
+];
+
+const ADMIN_NAV = [
+  { to: "/workflow-templates", label: "Workflow Templates", icon: Settings2, testId: "nav-workflow-templates" },
+  { to: "/audit-log", label: "Audit Log", icon: ScrollText, testId: "nav-audit-log" },
 ];
 
 export default function Layout() {
@@ -84,6 +91,29 @@ export default function Layout() {
               <span className="font-medium">{n.label}</span>
             </NavLink>
           ))}
+
+          {user && ["admin", "ProjectCoordinator"].includes(user.role) && (
+            <>
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold px-3 pt-5 pb-1">Admin</div>
+              {ADMIN_NAV.map((n) => (
+                <NavLink
+                  key={n.to}
+                  to={n.to}
+                  data-testid={n.testId}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2 rounded-sm text-[13px] transition-colors ${
+                      isActive
+                        ? "bg-blue-600/20 text-white border-l-2 border-blue-500 pl-[10px]"
+                        : "hover:bg-slate-800/60 hover:text-white"
+                    }`
+                  }
+                >
+                  <n.icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="font-medium">{n.label}</span>
+                </NavLink>
+              ))}
+            </>
+          )}
         </nav>
         <div className="px-3 py-4 border-t border-slate-800">
           <div className="flex items-center gap-3 px-2 py-2">

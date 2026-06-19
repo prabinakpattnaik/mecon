@@ -5,6 +5,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import io
+import csv
 import uuid
 import logging
 import random
@@ -13,7 +15,7 @@ import jwt
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Query, UploadFile, File
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
@@ -284,6 +286,7 @@ async def create_project(payload: ProjectCreate, user: dict = Depends(require_ro
     doc["created_at"] = now_iso()
     await db.projects.insert_one(doc)
     doc.pop("_id", None)
+    await log_audit(user, "project.create", "project", doc["id"], f"Created project {doc['code']}: {doc['name']}")
     return doc
 
 
@@ -426,12 +429,14 @@ async def create_ncr(payload: NCRCreate, user: dict = Depends(get_current_user))
     doc["closed_at"] = None
     await db.ncrs.insert_one(doc)
     doc.pop("_id", None)
+    await log_audit(user, "ncr.create", "ncr", doc["id"], f"Raised {doc['ncr_number']}: {doc['description'][:60]}")
     return doc
 
 
 @api.post("/ncrs/{nid}/close")
 async def close_ncr(nid: str, user: dict = Depends(require_role("QAQCEngineer", "ProjectCoordinator", "admin"))):
     await db.ncrs.update_one({"id": nid}, {"$set": {"status": "Closed", "closed_at": now_iso()}})
+    await log_audit(user, "ncr.close", "ncr", nid, "Closed NCR")
     return {"ok": True}
 
 
@@ -458,12 +463,14 @@ async def create_hindrance(payload: HindranceCreate, user: dict = Depends(get_cu
     doc["resolved_at"] = None
     await db.hindrances.insert_one(doc)
     doc.pop("_id", None)
+    await log_audit(user, "hindrance.create", "hindrance", doc["id"], f"Registered {doc['hindrance_number']}: {doc['type']}")
     return doc
 
 
 @api.post("/hindrances/{hid}/close")
 async def close_hindrance(hid: str, user: dict = Depends(require_role("ProjectCoordinator", "SiteEngineer", "admin"))):
     await db.hindrances.update_one({"id": hid}, {"$set": {"status": "Closed", "resolved_at": now_iso()}})
+    await log_audit(user, "hindrance.close", "hindrance", hid, "Resolved hindrance")
     return {"ok": True}
 
 
@@ -558,6 +565,7 @@ async def workflow_action(wid: str, payload: WorkflowAction, user: dict = Depend
     elif payload.action == "escalate":
         update["status"] = "Escalated"
     await db.workflows.update_one({"id": wid}, {"$set": update})
+    await log_audit(user, f"workflow.{payload.action}", "workflow", wid, f"{payload.action.title()} – {w.get('title', '')[:60]}")
     return {"ok": True}
 
 
@@ -677,6 +685,7 @@ async def create_wbs(payload: WBSCreate, user: dict = Depends(require_role("admi
     doc["created_at"] = now_iso()
     await db.wbs.insert_one(doc)
     doc.pop("_id", None)
+    await log_audit(user, "wbs.create", "wbs", doc["id"], f"Created WBS L{level}: {doc['code']} – {doc['name']}")
     return doc
 
 
@@ -688,6 +697,7 @@ async def update_wbs(wid: str, payload: WBSUpdate, user: dict = Depends(require_
     res = await db.wbs.update_one({"id": wid}, {"$set": update})
     if res.matched_count == 0:
         raise HTTPException(404, "Not found")
+    await log_audit(user, "wbs.update", "wbs", wid, f"Updated WBS fields: {', '.join(update.keys())}")
     return {"ok": True}
 
 
@@ -705,6 +715,7 @@ async def delete_wbs(wid: str, user: dict = Depends(require_role("admin", "Proje
                 next_queue.append(c["id"])
         queue = next_queue
     await db.wbs.delete_many({"id": {"$in": to_delete}})
+    await log_audit(user, "wbs.delete", "wbs", wid, f"Deleted WBS subtree ({len(to_delete)} nodes)")
     return {"ok": True, "deleted": len(to_delete)}
 
 
@@ -716,6 +727,267 @@ async def project_gantt(pid: str, user: dict = Depends(get_current_user)):
         raise HTTPException(404, "Project not found")
     activities = await db.activities.find({"project_id": pid}, {"_id": 0}).sort("planned_start", 1).to_list(500)
     return activities
+
+
+# ---------------- WBS Bulk Import (CSV) ----------------
+@api.post("/wbs/import")
+async def import_wbs_csv(
+    project_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role("admin", "ProjectCoordinator")),
+):
+    # CSV columns required: code,parent_code,name,weightage,planned_start,planned_end
+    project = await db.projects.find_one({"id": project_id})
+    if not project:
+        raise HTTPException(404, "Project not found")
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    reader = csv.DictReader(io.StringIO(content))
+    rows = list(reader)
+    if not rows:
+        raise HTTPException(400, "Empty CSV file")
+    required = {"code", "name"}
+    if not required.issubset({(k or "").strip() for k in rows[0].keys()}):
+        raise HTTPException(400, f"CSV must include columns: {', '.join(required)}; optional: parent_code, weightage, planned_start, planned_end")
+
+    # 2-pass insert: first all without parent linkage, then patch parent_id by parent_code
+    inserted = {}
+    for r in rows:
+        code = (r.get("code") or "").strip()
+        if not code:
+            continue
+        wid = uid()
+        inserted[code] = wid
+        await db.wbs.insert_one({
+            "id": wid,
+            "project_id": project_id,
+            "parent_id": None,
+            "code": code,
+            "name": (r.get("name") or "").strip(),
+            "level": 1,
+            "weightage": float(r.get("weightage") or 0),
+            "planned_start": (r.get("planned_start") or "").strip() or None,
+            "planned_end": (r.get("planned_end") or "").strip() or None,
+            "actual_start": None,
+            "actual_end": None,
+            "progress": 0,
+            "status": "Not Started",
+            "created_at": now_iso(),
+        })
+
+    # Resolve parent links + recompute levels via BFS
+    for r in rows:
+        code = (r.get("code") or "").strip()
+        parent_code = (r.get("parent_code") or "").strip()
+        if not code or not parent_code:
+            continue
+        if parent_code in inserted:
+            await db.wbs.update_one({"id": inserted[code]}, {"$set": {"parent_id": inserted[parent_code]}})
+
+    # Re-level: BFS from roots
+    nodes = await db.wbs.find({"project_id": project_id, "id": {"$in": list(inserted.values())}}, {"_id": 0}).to_list(5000)
+    by_id = {n["id"]: n for n in nodes}
+    levels = {}
+    def compute_level(nid):
+        if nid in levels:
+            return levels[nid]
+        node = by_id.get(nid)
+        if not node or not node.get("parent_id") or node["parent_id"] not in by_id:
+            levels[nid] = 1
+        else:
+            levels[nid] = compute_level(node["parent_id"]) + 1
+        return levels[nid]
+    for nid in by_id:
+        lvl = min(10, compute_level(nid))
+        await db.wbs.update_one({"id": nid}, {"$set": {"level": lvl}})
+
+    await log_audit(user, "wbs.import", "project", project_id, f"Imported {len(inserted)} WBS items via CSV")
+    return {"ok": True, "imported": len(inserted)}
+
+
+# ---------------- Workflow Templates ----------------
+@api.get("/workflow-templates")
+async def list_templates(user: dict = Depends(get_current_user)):
+    items = await db.workflow_templates.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return items
+
+
+@api.post("/workflow-templates")
+async def create_template(payload: dict, user: dict = Depends(require_role("admin", "ProjectCoordinator"))):
+    doc = {
+        "id": uid(),
+        "name": payload.get("name", "Untitled"),
+        "type": payload.get("type", "drawing"),
+        "description": payload.get("description", ""),
+        "default_priority": payload.get("default_priority", "Medium"),
+        "default_sla_hours": int(payload.get("default_sla_hours", 48)),
+        "stages": payload.get("stages") or ["Reviewer", "Section Incharge", "Package Coordinator", "Project Coordinator"],
+        "created_by": user["name"],
+        "created_at": now_iso(),
+    }
+    await db.workflow_templates.insert_one(doc)
+    await log_audit(user, "template.create", "workflow_template", doc["id"], f"Created template {doc['name']}")
+    doc.pop("_id", None)
+    return doc
+
+
+@api.delete("/workflow-templates/{tid}")
+async def delete_template(tid: str, user: dict = Depends(require_role("admin", "ProjectCoordinator"))):
+    res = await db.workflow_templates.delete_one({"id": tid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Not found")
+    await log_audit(user, "template.delete", "workflow_template", tid, "Deleted workflow template")
+    return {"ok": True}
+
+
+# ---------------- Audit Logs ----------------
+async def log_audit(user: dict, action: str, entity_type: str, entity_id: str, description: str, extra: dict = None):
+    try:
+        await db.audit_logs.insert_one({
+            "id": uid(),
+            "user_id": user.get("id"),
+            "user_name": user.get("name"),
+            "user_role": user.get("role"),
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "description": description,
+            "extra": extra or {},
+            "created_at": now_iso(),
+        })
+    except Exception as e:
+        logger.warning(f"audit log failed: {e}")
+
+
+@api.get("/audit-logs")
+async def list_audit(
+    user: dict = Depends(get_current_user),
+    limit: int = 100,
+    action: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    user_id: Optional[str] = None,
+):
+    q = {}
+    if action:
+        q["action"] = action
+    if entity_type:
+        q["entity_type"] = entity_type
+    if user_id:
+        q["user_id"] = user_id
+    items = await db.audit_logs.find(q, {"_id": 0}).sort("created_at", -1).limit(min(limit, 500)).to_list(500)
+    return items
+
+
+# ---------------- AI Risk Insights ----------------
+@api.get("/projects/{pid}/ai-insights")
+async def project_ai_insights(pid: str, force: bool = False, user: dict = Depends(get_current_user)):
+    project = await db.projects.find_one({"id": pid}, {"_id": 0})
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    # Return cached insight unless force regeneration requested (cache 30 min)
+    if not force:
+        cached = await db.ai_insights.find_one({"project_id": pid}, {"_id": 0})
+        if cached and (datetime.now(timezone.utc) - datetime.fromisoformat(cached["created_at"])).total_seconds() < 1800:
+            return cached
+
+    # Gather context
+    packages = await db.packages.find({"project_id": pid}, {"_id": 0}).to_list(50)
+    ncrs_open = await db.ncrs.find({"project_id": pid, "status": "Open"}, {"_id": 0}).to_list(50)
+    hinds_open = await db.hindrances.find({"project_id": pid, "status": "Open"}, {"_id": 0}).to_list(50)
+    milestones = await db.milestones.find({"project_id": pid}, {"_id": 0}).to_list(50)
+    recent_dpr = await db.dpr.find({"project_id": pid}, {"_id": 0}).sort("date", -1).limit(10).to_list(10)
+
+    def safe_iso_age(iso_str):
+        try:
+            d = datetime.fromisoformat(iso_str)
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - d).days
+        except Exception:
+            return None
+
+    ncr_sev_counts = {}
+    for n in ncrs_open:
+        ncr_sev_counts[n.get("severity", "Medium")] = ncr_sev_counts.get(n.get("severity", "Medium"), 0) + 1
+
+    hind_top = [
+        {"type": h.get("type"), "severity": h.get("severity"), "desc": h.get("description")[:80], "age_days": safe_iso_age(h.get("raised_at"))}
+        for h in hinds_open[:5]
+    ]
+    delayed_milestones = [m for m in milestones if m.get("status") == "Delayed"]
+    dpr_variances = [d.get("variance", 0) for d in recent_dpr]
+    avg_var = round(sum(dpr_variances) / max(1, len(dpr_variances)), 2)
+
+    context = {
+        "project": {
+            "code": project["code"], "name": project["name"], "client": project["client"],
+            "planned_pct": project.get("planned_progress"), "actual_pct": project.get("actual_progress"),
+            "health": project.get("health"), "start": project.get("start_date"), "end": project.get("end_date"),
+            "value_cr": project.get("value_cr"),
+        },
+        "packages_count": len(packages),
+        "packages_underperforming": [p["code"] for p in packages if p.get("progress", 0) < 40][:5],
+        "open_ncrs_count": len(ncrs_open),
+        "ncr_severity_counts": ncr_sev_counts,
+        "open_hindrances_count": len(hinds_open),
+        "top_hindrances": hind_top,
+        "delayed_milestones": [{"name": m["name"], "planned": m["planned_date"]} for m in delayed_milestones[:5]],
+        "dpr_avg_variance_last_10": avg_var,
+    }
+
+    # Call Claude Sonnet 4.6 via emergentintegrations
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+        import json as _json
+        chat = LlmChat(
+            api_key=os.environ["EMERGENT_LLM_KEY"],
+            session_id=f"mecon-insights-{pid}",
+            system_message=(
+                "You are a senior PMC (project monitoring consultancy) analyst at MECON Limited. "
+                "Given structured project data, return ONLY a JSON object with this exact shape: "
+                '{"health_summary":"<one paragraph, 2-3 sentences>", '
+                '"top_risks":[{"title":"...","why":"...","impact":"High|Medium|Low"}], '
+                '"recommendations":[{"action":"...","owner":"...","priority":"P0|P1|P2"}], '
+                '"forecast":"<one sentence delay/cost forecast>"}. '
+                "Limit top_risks to 3 items and recommendations to 3 items. Do not include markdown fences, only raw JSON."
+            ),
+        ).with_model("anthropic", "claude-sonnet-4-6")
+
+        prompt = f"Project data:\n{_json.dumps(context, indent=2)}\n\nReturn JSON only."
+        buf = []
+        async for ev in chat.stream_message(UserMessage(text=prompt)):
+            if isinstance(ev, TextDelta):
+                buf.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+        raw = "".join(buf).strip()
+        # strip code fences if present
+        if raw.startswith("```"):
+            raw = raw.strip("`").lstrip("json").strip()
+        try:
+            parsed = _json.loads(raw)
+        except Exception:
+            parsed = {"health_summary": raw[:800], "top_risks": [], "recommendations": [], "forecast": ""}
+    except Exception as e:
+        logger.exception(f"AI insights failed: {e}")
+        parsed = {
+            "health_summary": f"AI engine unavailable ({type(e).__name__}). Showing rule-based summary: project at {context['project']['actual_pct']}% actual vs {context['project']['planned_pct']}% planned with {context['open_ncrs_count']} open NCRs.",
+            "top_risks": [{"title": "Schedule variance", "why": f"DPR avg variance {avg_var}", "impact": "High" if avg_var < -1 else "Medium"}],
+            "recommendations": [{"action": "Review critical-path activities with package coordinators", "owner": "Project Coordinator", "priority": "P0"}],
+            "forecast": "",
+        }
+
+    insight_doc = {
+        "id": uid(),
+        "project_id": pid,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "generated_by": user.get("name"),
+        "context_snapshot": context,
+        **parsed,
+    }
+    await db.ai_insights.replace_one({"project_id": pid}, insight_doc, upsert=True)
+    insight_doc.pop("_id", None)
+    return insight_doc
 
 
 # ---------------- Mount ----------------

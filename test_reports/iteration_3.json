@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration-3 Phase-2 testing complete. Backend: 17/17 new pytest tests PASS (AI insights structure/cache/force/404, WBS CSV import + RBAC + level auto-compute + cleanup, WBS PATCH, Workflow Templates list/create/delete + admin/PC/contractor RBAC, Audit Logs listing/filter/limit-cap/auto-creation). Frontend: All admin flows verified — Workflow Templates page renders 'Drawing Approval - Standard' seed + new TEST_UI_Template_X created via dialog (2 cards). Audit Log shows 19 events with all 7 filter buttons (all/project/ncr/hindrance/workflow/wbs/workflow_template); workflow_template filter narrows to 10. ProjectDetail Overview shows ai-insight-card with health summary, risks=3, recs=3, forecast=True, refresh button. WBS tab as admin shows Import CSV button, csv-import-dialog opens with sample download + file input, inline edit reveals name/progress inputs and save button. Contractor RBAC verified: admin sidebar section hidden, WBS edit/add/delete/import all hidden (0 controls), Actions column absent.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase2_ai_audit_templates.py",
+    "/app/test_reports/pytest/iter3_results.xml"
+  ],
+  "action_items": [
+    "(Minor) Route /workflow-templates and /audit-log are reachable by direct URL for non-admin roles (page loads, though no admin sidebar link). Backend POST/DELETE remain 403, so no data leak, but consider a ProtectedRoute role-guard for cleanliness.",
+    "(Carry-over) Workflows page row-level Approve/Reject/Escalate still render for closed workflows — only drawer hides them."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to 1411 lines — split into routers (ai_insights/audit/templates/wbs) recommended.",
+    "POST /api/wbs/import: level auto-computation uses recursion (compute_level) without an explicit cycle guard. A self-referencing parent_code in CSV could blow the stack; consider an explicit visited set.",
+    "GET /api/projects/{pid}/ai-insights uses cache key only by project_id with 30-min TTL — no invalidation on project mutation. Fresh NCRs/Hindrances won't be reflected for 30 min unless user clicks Regenerate. Document this or invalidate on related writes.",
+    "AI insights fallback (when LLM fails) is silently returned with same shape — frontend can't distinguish 'rule-based' vs 'AI' result. Add a field like is_fallback: true.",
+    "CsvImportDialog uses fetch + localStorage token directly instead of the shared api/client.js axios instance — cookie-based auth fallback won't work. Consider using axios with FormData (axios handles multipart Content-Type automatically).",
+    "log_audit() swallows all exceptions with a warn log — fine for resilience, but no metrics/alert if audit chain breaks."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase2_ai_audit_templates.py (new)"
+  ],
+  "success_rate": { "backend": "100% (17/17 new + 13/13 + 41/41 carry-over)", "frontend": "100% on Phase-2 features (admin + contractor RBAC)" },
+  "test_credentials": "admin@mecon.in / Mecon@2026, pc@mecon.in / Demo@2026, contractor@lnt.com / Demo@2026 — all verified.",
+  "seed_data_creation": "Created TESTP2-R/A/A1/B WBS subtree via CSV import (cascade-deleted in same test). Created TEST_UI_Template_X, TEST_PC_Template, TEST_DEL, TEST_AUDIT workflow templates (each deleted in their test). No leftover test data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "AI insights cache: 30 min, keyed by project_id. force=true regenerates and updates created_at. Frontend admin nav uses ['admin','ProjectCoordinator'] role check (Layout.js line ~38). Contractor sees no admin section. Project rows on /projects don't have data-testid='project-row-*' — use 'a:has-text(\"Open\")' to drill in. WBS edit-name and edit-progress testids overlap with wbs-edit-{id} so filter them out when counting edit buttons.",
+  "rca of the issue": "N/A — no bugs found this iteration."
+}
