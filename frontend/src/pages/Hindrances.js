@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/client";
 import StatusBadge from "../components/StatusBadge";
-import { Check, AlertTriangle } from "lucide-react";
+import { Check, Plus } from "lucide-react";
+import CreateHindranceDialog from "../components/CreateHindranceDialog";
 
 export default function Hindrances() {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -28,10 +30,19 @@ export default function Hindrances() {
 
   return (
     <div className="space-y-5" data-testid="hindrances-root">
-      <div>
-        <div className="text-overline">Field Constraints</div>
-        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900 mt-1">Hindrance Management</h1>
-        <p className="text-sm text-slate-600 mt-1">Track execution hindrances, resolution aging and responsibility.</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-overline">Field Constraints</div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900 mt-1">Hindrance Management</h1>
+          <p className="text-sm text-slate-600 mt-1">Track execution hindrances, resolution aging and responsibility.</p>
+        </div>
+        <button
+          data-testid="hnd-create-button"
+          onClick={() => setShowCreate(true)}
+          className="text-sm font-semibold px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-sm inline-flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> Register Hindrance
+        </button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -90,6 +101,8 @@ export default function Hindrances() {
           </tbody>
         </table>
       </div>
+
+      <CreateHindranceDialog open={showCreate} onClose={() => setShowCreate(false)} onCreated={() => load()} />
     </div>
   );
 }

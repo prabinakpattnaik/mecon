@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/client";
 import StatusBadge from "../components/StatusBadge";
-import { ArrowUpRight, Check, X, FastForward } from "lucide-react";
+import { Check, X, FastForward, Eye } from "lucide-react";
+import WorkflowDrawer from "../components/WorkflowDrawer";
 
 export default function Workflows() {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [activeId, setActiveId] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -72,6 +74,12 @@ export default function Workflows() {
                 <td className="px-4 py-2.5"><StatusBadge value={w.status} /></td>
                 <td className="px-4 py-2.5">
                   <div className="flex justify-end gap-1">
+                    <button
+                      data-testid={`wf-view-${w.id}`}
+                      onClick={() => setActiveId(w.id)}
+                      className="p-1.5 hover:bg-slate-100 text-slate-700 border border-transparent hover:border-slate-300 rounded-sm"
+                      title="View history"
+                    ><Eye className="w-3.5 h-3.5" /></button>
                     {["Pending", "In Progress", "Escalated"].includes(w.status) ? (
                       <>
                         <button
@@ -94,7 +102,7 @@ export default function Workflows() {
                         ><FastForward className="w-3.5 h-3.5" /></button>
                       </>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">closed</span>
+                      <span className="text-[11px] text-slate-400 italic self-center pl-1">closed</span>
                     )}
                   </div>
                 </td>
@@ -106,6 +114,12 @@ export default function Workflows() {
           </tbody>
         </table>
       </div>
+
+      <WorkflowDrawer
+        workflowId={activeId}
+        onClose={() => setActiveId(null)}
+        onChanged={() => load()}
+      />
     </div>
   );
 }

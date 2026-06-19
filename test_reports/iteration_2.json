@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 2: Tested new WBS / Gantt / Workflow-drawer features + Create dialogs (Project, NCR, Hindrance, DPR). Backend: 13/13 new pytest tests pass (including WBS RBAC, cascade delete, level auto-calc, Gantt activities, Workflow history append). Frontend: CRITICAL build-error bug found and fixed — WbsTree.jsx triggered Babel 'Maximum call stack size exceeded' due to recursive <Node/> JSX pattern; rewrote with iterative flat-render. After fix, all new flows verified: Create Project dialog persists row, ProjectDetail Tabs (overview/wbs/gantt/packages/milestones) all present, WBS tree shows 17 default-expanded nodes (3 levels) and expand-toggle reveals children (+3), Gantt renders 42 bars across Engineering/Procurement/Construction with 35 wf-view buttons. Workflow drawer opens with priority/SLA/stage cards and history timeline; Closed (Approved) workflow correctly hides action buttons (matches spec).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "WbsTree.jsx", "issue": "Original recursive <Node/> JSX component caused Babel/babel-loader 'RangeError: Maximum call stack size exceeded' — entire frontend failed to compile. Fixed by testing agent: rewrote to iterative flat-render (useMemo + Set of expanded ids + while-loop flatten). Recommend main agent review/keep the new structure.", "selector": "/app/frontend/src/components/WbsTree.jsx", "priority": "CRITICAL_FIXED"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wbs_gantt_workflow.py",
+    "/app/backend/tests/test_mecon_backend.py",
+    "/app/test_reports/pytest/iter2_results.xml"
+  ],
+  "action_items": [
+    "Review the rewritten /app/frontend/src/components/WbsTree.jsx (iterative version). Original recursive component is incompatible with current Babel/CRA toolchain — keep iterative approach or upgrade Babel.",
+    "(carry-over from iter1) Workflows page row-level Approve/Reject/Escalate buttons still render even for closed workflows — only the drawer correctly hides them. Consider gating row buttons by status too."
+  ],
+  "critical_code_review_comments": [
+    "WbsTree.jsx recursive JSX with inner function reference triggered Babel infinite traversal — pattern to avoid in this CRA/Babel version.",
+    "server.py grew to ~1120 lines (still single-file). Consider splitting into routers (auth/projects/wbs/workflows/finance) when adding more features.",
+    "POST /api/wbs uses parent.level+1 but does NOT validate that the resulting level <= 10 even though product spec says 10-level tree — add bound check.",
+    "DELETE /api/wbs cascades only ONE level (children of root) — grandchildren of cascaded children are NOT deleted (db.wbs.delete_many({'id': c['id']}) just deletes the child itself, then grandchildren become orphaned). Should be recursive cascade.",
+    "/api/projects/{pid}/gantt has no project-existence check — returns [] for invalid pid instead of 404.",
+    "PATCH /api/wbs allows SiteEngineer to update including planned_start/end and weightage — may want to restrict to progress/actual_start/actual_end for SiteEngineer."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_wbs_gantt_workflow.py (new)",
+    "/app/frontend/src/components/WbsTree.jsx (rewritten iterative to fix Babel build failure)"
+  ],
+  "success_rate": {"backend": "100% (13/13 new + 41/41 carry-over)", "frontend": "100% after WbsTree fix (was 0% blocked before)"},
+  "test_credentials": "admin@mecon.in / Mecon@2026 (admin) and contractor@lnt.com / Demo@2026 (RBAC) — both verified.",
+  "seed_data_creation": "No new seed. WBS auto-seeded on startup (~59 items / project across L1-L4). Activities ~42/project. Created TEST_WBS_ROOT (cleaned up via cascade-delete test) and TESTUI-B1 project via UI.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "WbsTree was originally written with a recursive React function `Node({...})` that called itself via JSX `<Node .../>` inside `.map()`. The CRA Babel toolchain in this project chokes on that pattern with 'Maximum call stack size exceeded' even after renaming. The iterative version (flatten via while-loop with expanded Set) compiles cleanly. Keep this pattern. Backend new tests are in test_wbs_gantt_workflow.py. Existing test_mecon_backend.py still applies.",
+  "rca of the issue": "WbsTree.jsx: Babel/babel-loader threw RangeError during AST traversal of the recursive React component. The recursive JSX `function Node({...}) { ... <Node .../> ... }` pattern combined with template-literal styles and arbitrary-Tailwind class strings inside the same JSX expression caused babel-traverse to enter an infinite loop in this CRA's Babel version. Rename (Node → WbsNodeRow) alone did not help; the only reliable fix was to make the rendering iterative (flatten the tree once via while-loop, then render a single flat list). Reproduce by restoring the recursive version — webpack will fail compile with 'Maximum call stack size exceeded'. Fix: iterative flat-render in /app/frontend/src/components/WbsTree.jsx (now committed)."
+}

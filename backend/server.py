@@ -194,6 +194,27 @@ class BillCreate(BaseModel):
     value_lakh: float
 
 
+class WBSCreate(BaseModel):
+    project_id: str
+    parent_id: Optional[str] = None
+    code: str
+    name: str
+    weightage: float = 0.0
+    planned_start: Optional[str] = None
+    planned_end: Optional[str] = None
+
+
+class WBSUpdate(BaseModel):
+    name: Optional[str] = None
+    weightage: Optional[float] = None
+    progress: Optional[float] = None
+    planned_start: Optional[str] = None
+    planned_end: Optional[str] = None
+    actual_start: Optional[str] = None
+    actual_end: Optional[str] = None
+    status: Optional[str] = None
+
+
 # ---------------- Auth Routes ----------------
 @api.post("/auth/login")
 async def login(payload: LoginRequest, response: Response):
@@ -509,6 +530,14 @@ async def create_workflow(payload: WorkflowCreate, user: dict = Depends(get_curr
     return doc
 
 
+@api.get("/workflows/{wid}")
+async def get_workflow(wid: str, user: dict = Depends(get_current_user)):
+    w = await db.workflows.find_one({"id": wid}, {"_id": 0})
+    if not w:
+        raise HTTPException(404, "Not found")
+    return w
+
+
 @api.post("/workflows/{wid}/action")
 async def workflow_action(wid: str, payload: WorkflowAction, user: dict = Depends(get_current_user)):
     w = await db.workflows.find_one({"id": wid})
@@ -621,6 +650,62 @@ async def dashboard_summary(user: dict = Depends(get_current_user)):
     }
 
 
+# ---------------- WBS ----------------
+@api.get("/wbs")
+async def list_wbs(project_id: str, user: dict = Depends(get_current_user)):
+    items = await db.wbs.find({"project_id": project_id}, {"_id": 0}).sort("code", 1).to_list(2000)
+    return items
+
+
+@api.post("/wbs")
+async def create_wbs(payload: WBSCreate, user: dict = Depends(require_role("admin", "ProjectCoordinator"))):
+    doc = payload.model_dump()
+    doc["id"] = uid()
+    # determine level
+    level = 1
+    if payload.parent_id:
+        parent = await db.wbs.find_one({"id": payload.parent_id})
+        if parent:
+            level = (parent.get("level", 1) or 1) + 1
+    doc["level"] = level
+    doc["progress"] = 0
+    doc["actual_start"] = None
+    doc["actual_end"] = None
+    doc["status"] = "Not Started"
+    doc["created_at"] = now_iso()
+    await db.wbs.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.patch("/wbs/{wid}")
+async def update_wbs(wid: str, payload: WBSUpdate, user: dict = Depends(require_role("admin", "ProjectCoordinator", "SiteEngineer"))):
+    update = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update:
+        return {"ok": True}
+    res = await db.wbs.update_one({"id": wid}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+@api.delete("/wbs/{wid}")
+async def delete_wbs(wid: str, user: dict = Depends(require_role("admin", "ProjectCoordinator"))):
+    # Cascade delete children
+    children = await db.wbs.find({"parent_id": wid}, {"_id": 0, "id": 1}).to_list(2000)
+    for c in children:
+        await db.wbs.delete_many({"id": c["id"]})
+    await db.wbs.delete_one({"id": wid})
+    return {"ok": True}
+
+
+# ---------------- Gantt ----------------
+@api.get("/projects/{pid}/gantt")
+async def project_gantt(pid: str, user: dict = Depends(get_current_user)):
+    activities = await db.activities.find({"project_id": pid}, {"_id": 0}).sort("planned_start", 1).to_list(500)
+    return activities
+
+
 # ---------------- Mount ----------------
 app.include_router(api)
 
@@ -678,8 +763,14 @@ async def seed_admin_and_demo():
                 "created_at": now_iso(),
             })
 
-    # If projects already exist, skip rest of seeding
+    # If projects already exist, skip rest of seeding except WBS check
     if await db.projects.count_documents({}) > 0:
+        # Seed WBS + activities if missing (so existing pods get this new data)
+        if await db.wbs.count_documents({}) == 0:
+            rnd = random.Random(42)
+            existing_projects = await db.projects.find({}, {"_id": 0}).to_list(50)
+            project_ids = [(p["id"], p["code"], p["name"]) for p in existing_projects]
+            await _seed_wbs_and_activities(project_ids, rnd)
         return
 
     rnd = random.Random(42)
@@ -936,7 +1027,90 @@ async def seed_admin_and_demo():
             "read": False,
         })
 
+    # WBS hierarchy + Activities (for Gantt)
+    await _seed_wbs_and_activities(project_ids, rnd)
+
     logger.info("Seed completed successfully")
+
+
+async def _seed_wbs_and_activities(project_ids, rnd):
+    wbs_areas = [
+        ("Engineering", ["Process Design", "Civil Design", "Mechanical Design", "Electrical Design"]),
+        ("Procurement", ["Material Sourcing", "Vendor Mgmt", "Logistics"]),
+        ("Construction", ["Civil Works", "Structural Erection", "Mechanical Erection", "Electrical Installation", "Piping", "Commissioning"]),
+    ]
+    for pid, pcode, pname in project_ids:
+        # Level 1: project root
+        root_id = uid()
+        await db.wbs.insert_one({
+            "id": root_id, "project_id": pid, "parent_id": None,
+            "code": pcode, "name": pname, "level": 1,
+            "weightage": 100, "progress": rnd.randint(20, 70),
+            "planned_start": "2024-04-01", "planned_end": "2027-12-31",
+            "actual_start": "2024-04-15", "actual_end": None,
+            "status": "In Progress",
+        })
+        for ai, (area, subs) in enumerate(wbs_areas):
+            area_id = uid()
+            area_start = datetime(2024 + ai // 2, 4 + ai * 2, 1)
+            area_end = area_start + timedelta(days=600)
+            await db.wbs.insert_one({
+                "id": area_id, "project_id": pid, "parent_id": root_id,
+                "code": f"{pcode}.{ai+1}", "name": area, "level": 2,
+                "weightage": [25, 25, 50][ai],
+                "progress": rnd.randint(15, 80),
+                "planned_start": area_start.date().isoformat(),
+                "planned_end": area_end.date().isoformat(),
+                "actual_start": area_start.date().isoformat(),
+                "actual_end": None, "status": "In Progress",
+            })
+            for si, sub in enumerate(subs):
+                sub_id = uid()
+                sub_start = area_start + timedelta(days=si * 90)
+                sub_end = sub_start + timedelta(days=180 + rnd.randint(30, 120))
+                progress = rnd.randint(0, 100)
+                status = "Completed" if progress >= 100 else ("In Progress" if progress > 0 else "Not Started")
+                await db.wbs.insert_one({
+                    "id": sub_id, "project_id": pid, "parent_id": area_id,
+                    "code": f"{pcode}.{ai+1}.{si+1}", "name": sub, "level": 3,
+                    "weightage": round(100 / len(subs), 1),
+                    "progress": progress,
+                    "planned_start": sub_start.date().isoformat(),
+                    "planned_end": sub_end.date().isoformat(),
+                    "actual_start": sub_start.date().isoformat() if progress > 0 else None,
+                    "actual_end": sub_end.date().isoformat() if progress >= 100 else None,
+                    "status": status,
+                })
+                for ti in range(rnd.randint(2, 4)):
+                    task_id = uid()
+                    task_start = sub_start + timedelta(days=ti * 45)
+                    task_end = task_start + timedelta(days=60 + rnd.randint(15, 75))
+                    t_progress = rnd.randint(0, 100)
+                    t_status = "Completed" if t_progress >= 100 else ("In Progress" if t_progress > 0 else "Not Started")
+                    task_name = f"{sub} – Activity {ti+1}"
+                    await db.wbs.insert_one({
+                        "id": task_id, "project_id": pid, "parent_id": sub_id,
+                        "code": f"{pcode}.{ai+1}.{si+1}.{ti+1}",
+                        "name": task_name, "level": 4,
+                        "weightage": round(100 / max(1, rnd.randint(2, 4)), 1),
+                        "progress": t_progress,
+                        "planned_start": task_start.date().isoformat(),
+                        "planned_end": task_end.date().isoformat(),
+                        "actual_start": task_start.date().isoformat() if t_progress > 0 else None,
+                        "actual_end": task_end.date().isoformat() if t_progress >= 100 else None,
+                        "status": t_status,
+                    })
+                    await db.activities.insert_one({
+                        "id": uid(), "project_id": pid, "wbs_id": task_id,
+                        "code": f"{pcode}.{ai+1}.{si+1}.{ti+1}",
+                        "name": task_name, "area": area,
+                        "planned_start": task_start.date().isoformat(),
+                        "planned_end": task_end.date().isoformat(),
+                        "actual_start": task_start.date().isoformat() if t_progress > 0 else None,
+                        "actual_end": task_end.date().isoformat() if t_progress >= 100 else None,
+                        "progress": t_progress, "status": t_status,
+                        "is_critical": rnd.random() < 0.25,
+                    })
 
 
 @app.on_event("startup")

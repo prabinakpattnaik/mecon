@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/client";
 import StatusBadge from "../components/StatusBadge";
-import { Users, Truck, Check } from "lucide-react";
+import { Users, Truck, Check, Plus } from "lucide-react";
+import CreateDPRDialog from "../components/CreateDPRDialog";
 
 export default function DPR() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -20,10 +22,19 @@ export default function DPR() {
 
   return (
     <div className="space-y-5" data-testid="dpr-root">
-      <div>
-        <div className="text-overline">Field Operations</div>
-        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900 mt-1">Daily Progress Reports</h1>
-        <p className="text-sm text-slate-600 mt-1">Daily DPR submissions from contractors with planned/actual variance.</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-overline">Field Operations</div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900 mt-1">Daily Progress Reports</h1>
+          <p className="text-sm text-slate-600 mt-1">Daily DPR submissions from contractors with planned/actual variance.</p>
+        </div>
+        <button
+          data-testid="dpr-create-button"
+          onClick={() => setShowCreate(true)}
+          className="text-sm font-semibold px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-sm inline-flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> Submit DPR
+        </button>
       </div>
 
       <div className="card-flat overflow-hidden">
@@ -65,6 +76,8 @@ export default function DPR() {
           </tbody>
         </table>
       </div>
+
+      <CreateDPRDialog open={showCreate} onClose={() => setShowCreate(false)} onCreated={() => load()} />
     </div>
   );
 }

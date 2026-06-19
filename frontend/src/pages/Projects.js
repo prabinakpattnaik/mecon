@@ -2,22 +2,41 @@ import React, { useEffect, useState } from "react";
 import api from "../api/client";
 import StatusBadge from "../components/StatusBadge";
 import { Link } from "react-router-dom";
-import { Building2, ArrowRight } from "lucide-react";
+import { Building2, ArrowRight, Plus } from "lucide-react";
+import CreateProjectDialog from "../components/CreateProjectDialog";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Projects() {
+  const { user } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     api.get("/projects").then((r) => setProjects(r.data)).finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(load, []);
+
+  const canCreate = user && ["admin", "ProjectCoordinator"].includes(user.role);
 
   return (
     <div className="space-y-5" data-testid="projects-root">
-      <div>
-        <div className="text-overline">Portfolio</div>
-        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900 mt-1">Projects</h1>
-        <p className="text-sm text-slate-600 mt-1">All active mega-projects under MECON monitoring.</p>
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-overline">Portfolio</div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900 mt-1">Projects</h1>
+          <p className="text-sm text-slate-600 mt-1">All active mega-projects under MECON monitoring.</p>
+        </div>
+        {canCreate && (
+          <button
+            data-testid="projects-create-button"
+            onClick={() => setShowCreate(true)}
+            className="text-sm font-semibold px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-sm inline-flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> New Project
+          </button>
+        )}
       </div>
 
       {loading && <div className="text-overline text-slate-500">Loading…</div>}
@@ -77,6 +96,12 @@ export default function Projects() {
           </Link>
         ))}
       </div>
+
+      <CreateProjectDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={() => load()}
+      />
     </div>
   );
 }
